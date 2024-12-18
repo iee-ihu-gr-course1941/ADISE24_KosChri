@@ -14,17 +14,20 @@
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
 
--- Data exporting was unselected.
 
--- Data exporting was unselected.
+-- Dumping database structure for test_db
+CREATE DATABASE IF NOT EXISTS `test_db` /*!40100 DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci */;
+USE `test_db`;
 
--- Data exporting was unselected.
+-- Dumping structure for table test_db.this
+CREATE TABLE IF NOT EXISTS `this` (
+  `d1` int(11) DEFAULT NULL,
+  `d2` int(11) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Data exporting was unselected.
-
--- Data exporting was unselected.
-
--- Data exporting was unselected.
+-- Dumping data for table test_db.this: ~1 rows (approximately)
+INSERT INTO `this` (`d1`, `d2`) VALUES
+	(2, 1);
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
