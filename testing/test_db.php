@@ -1,16 +1,19 @@
 <?php
-require_once 'config/db.php';
+ini_set('display_errors', 1);
+error_reporting(E_ALL);
+
+require_once('../config/db.php'); 
 
 try {
-    // Attempt a simple query to verify the connection
-    $stmt = $pdo->query("SELECT VERSION() AS db_version");
-    $result = $stmt->fetch();
+    // You can test your connection by doing a simple query, like fetching a list of tables
+    $stmt = $pdo->query("SHOW TABLES");
+    $tables = $stmt->fetchAll();
     
-    // Output success and MySQL version
-    echo "Database connection successful! 🎉<br>";
-    echo "MySQL version: " . $result['db_version'];
+    echo "Connection successful! Here are the tables in the database:<br>";
+    foreach ($tables as $table) {
+        echo $table[0] . "<br>"; // Print each table name
+    }
 } catch (PDOException $e) {
-    // Output failure
     echo "Connection failed: " . $e->getMessage();
 }
 ?>
