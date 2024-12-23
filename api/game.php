@@ -59,6 +59,117 @@ try {
 }
 
 
+
+
+
+function fillTileBag(){
+    global $mysqli;
+
+    $colors = ["red", "blue", "green", "yellow"];
+    $shapes = ["circle", "square", "triangle", "star"];
+    $points = [1, 2, 3, 4]; 
+    $mysqli -> begin_transaction();
+//points needed or not ?? 
+    try{
+        $mysqli->query("DELETE FROM tile_bag");
+        $mysqli->query("DELETE FROM tiles");
+
+        $stmt_tile = $mysqli->prepare("INSERT INTO tiles (color,shape,points) VALUES (?,?, ?)");
+        $stmt_bag = $mysqli-> prepare("INSERT INTO tile_bag (tile_id,quantity) VALUES (?,?)");
+
+        foreach ($colors as $color) {
+            foreach($shapes as $shape){
+                foreach($points as $point){
+                $stmt_tile-> bind_param("ssi", $color, $shape, $point);
+                $stmt_tile->execute();
+                $tileId= $stmt_tile ->insert_id;   // might need to change to tile_id
+
+                $quantity = 3;
+                $stmt_bag->bind_param("ii", $tileId, $quantity);
+                $stmt_bag->execute();
+
+
+            }
+            
+        }
+    }
+
+        $mysqli->commit();
+        $stmt_bag->close();
+        $stmt_tile->close();
+        echo "Tile bag filled!";
+
+    }catch( Exception $e){
+        $mysqli->rollback();
+        throw $e;
+    }    
+}
+        //test     test         test        test        test
+try{
+    fillTileBag();
+}catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+
+function drawTile(){
+    global $mysqli;
+
+    $sql = 'SELECT tile_id FROM tile_bag ORDER BY RAND() LIMIT 1';
+    $st = $mysqli->prepare($sql);
+    $st->execute();
+    $result = $st->get_result();
+    $row = $result->fetch_assoc();
+    $tileId = $row['tile_id'];
+
+    $sql = "UPDATE tile_bag SET quantity = quantity -1 WHERE tile_id = ?";
+    $st =  $mysqli->prepare($sql);
+    $st -> bind_param('i' , $tileId);
+    $st -> execute();
+
+    $sql =  "DELETE FROM tile_bag WHERE tile_id= ? AND quantity <=0";
+    $st = $mysqli-> prepare($sql);
+    $st ->bind_param('i', $tileId);
+    $st->execute();
+
+    return $tileId;
+
+}
+
+function drawTileStart($playerId){
+    global $mysqli;
+
+    $mysqli->begin_transaction();
+    
+    try{
+        $st_hand = $mysqli->prepare("INSERT INTO player_hands (player_id,tile_id) VALUES (?,?)");
+        for($i=0 ; $i<6; $i++){
+            $tileId = drawTile();
+
+            $st_hand -> bind_param('ii', $playerId,$tileId);
+            $st_hand->execute();
+
+        }
+    
+    $mysqli->commit();
+    $st_hand->close();
+       echo "Starting tiles drawn successfully for player ID: $playerId.";
+    }catch (Exception $e) {
+        // Rollback the transaction in case of error
+        $mysqli->rollback();
+        throw $e;
+    }
+
+}
+
+// test     test    test    teest
+
+try {
+    $playerId = 813; // Replace with the actual player ID you want to draw tiles for
+    drawTileStart($playerId);
+} catch (Exception $e) {
+    echo "Error: " . $e->getMessage();
+}
+
 // function drawTile($gameId, $playerId) {
 //     global $mysqli;
 
