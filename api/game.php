@@ -206,6 +206,9 @@ function initializeGame($playerName1,$playerName2){
     }
     $stmt->close();
 }
+
+
+//testing
 try {
     $playerName1 = "Kos"; 
     $playerName2 = "Chris"; 
@@ -214,6 +217,61 @@ try {
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }
+
+
+
+
+function initBoard(){
+    global $mysqli;
+
+
+    $mysqli->begin_transaction();
+
+    try{
+
+        for($row =1 ; $row <=15; $row++){
+            for($col=1; $col <=15; $col++){
+                $stmt = $mysqli -> prepare("INSERT INTO board (row,col) VALUES (?,?)");
+                $stmt -> bind_param('ii', $row, $col);
+                $stmt->execute();
+            }
+        }
+        $mysqli->commit();
+        echo "Board init successfully.";
+
+    }catch(Exception $e){
+        $mysqli->rollback();
+        throw $e;
+    }
+}
+
+function cleanBoard(){
+    global $mysqli;
+
+    $mysqli->begin_transaction();
+
+    try{
+        $stmt = $mysqli->prepare("UPDATE board SET tile_id= NULL");
+        $stmt->execute();
+
+        $mysqli->commit();
+        echo "Board cleaned successfully.";
+    }catch (Exception $e) {
+        $mysqli->rollback();
+        throw $e;
+    }
+}
+
+///test     test test   test    test    test
+// try {
+//     // Initialize the board
+//     initBoard();
+
+//     // Clean the board
+//     cleanBoard();
+// } catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
+// }
 
 // function drawTile($gameId, $playerId) {
 //     global $mysqli;
