@@ -19,16 +19,21 @@ function createGame($playerId1,$playerId2) {
 
     }
 
-    //testing function cG ()
-$playerId1 = '800';
-$playerId2 = '255';
-$gameId = createGame($playerId1,$playerId2);
+//     //testing function cG ()
+// $playerId1 = '800';
+// $playerId2 = '255';
+// $gameId = createGame($playerId1,$playerId2);
 
-if ($gameId !== false) {
-    echo "Game created successfully with ID: " . $gameId;
-} else {
-    echo "Failed to create game.";
-}
+
+
+// have to lock the players inside the game do not forget! 
+
+
+// if ($gameId !== false) {
+//     echo "Game created successfully with ID: " . $gameId;
+// } else {
+//     echo "Failed to create game.";
+// }
 
 
 
@@ -49,14 +54,14 @@ function addPlayer($name){
     $stmt->close();
 }
 // test function addPlayer()
-try {
-    $playerName = "Kostas"; 
-    $newPlayerId = addPlayer($playerName);
+// try {
+//     $playerName = "Kostas"; 
+//     $newPlayerId = addPlayer($playerName);
 
-    echo "Player added successfully with ID: " . $newPlayerId;
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
-}
+//     echo "Player added successfully with ID: " . $newPlayerId;
+// } catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
+// }
 
 
 
@@ -72,7 +77,7 @@ function fillTileBag(){
 //points needed or not ?? 
     try{
         $mysqli->query("DELETE FROM tile_bag");
-        $mysqli->query("DELETE FROM tiles");
+        // $mysqli->query("DELETE FROM tiles");
 
         $stmt_tile = $mysqli->prepare("INSERT INTO tiles (color,shape,points) VALUES (?,?, ?)");
         $stmt_bag = $mysqli-> prepare("INSERT INTO tile_bag (tile_id,quantity) VALUES (?,?)");
@@ -163,9 +168,49 @@ function drawTileStart($playerId){
 
 // test     test    test    teest
 
+// try {
+//     $playerId = 813; // Replace with the actual player ID you want to draw tiles for
+//     drawTileStart($playerId);
+// } catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
+// }
+
+
+
+
+function initializeGame($playerName1,$playerName2){
+
+    global $mysqli;
+
+    $playerId1 = addPlayer($playerName1);
+    $playerId2 = addPlayer($playerName2);
+
+    $st= $mysqli->prepare("INSERT INTO games (player1_id,player2_id,status) VALUES (?,?, 'ongoing')");
+    $st->bind_param('ii', $playerId1,$playerId2);
+
+    if($st->execute()){
+        $gameId = $st->insert_id;
+
+        $players = [ $playerId1, $playerId2];
+        shuffle($players);
+        $currentTurn = $players[0];
+
+        $sql = "UPDATE games SET current_turn= ? WHERE id = ?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('ii', $currentTurn ,$gameId);
+        $st->execute();
+
+        return $gameId;
+    }else{
+        throw new Exception("Failed to create game.");
+    }
+    $stmt->close();
+}
 try {
-    $playerId = 813; // Replace with the actual player ID you want to draw tiles for
-    drawTileStart($playerId);
+    $playerName1 = "Kos"; 
+    $playerName2 = "Chris"; 
+    $gameId = initializeGame($playerName1, $playerName2);
+    echo "Game initialized successfully with ID: " . $gameId;
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage();
 }
