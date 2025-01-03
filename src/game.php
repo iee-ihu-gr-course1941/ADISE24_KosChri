@@ -1,23 +1,68 @@
 <?php
 include('dbconnect.php');
+// 1111
+// function createGame($playerId1,$playerId2) {
+//     global $mysqli;
 
-function createGame($playerId1,$playerId2) {
+
+//     $stmt = $mysqli -> prepare("INSERT INTO games (player1_id, player2_id, status) VALUES (?,?, 'ongoing')");
+//     $stmt -> bind_param('ii', $playerId1,$playerId2);
+
+//     if($stmt->execute()){
+//         $gameId = $stmt->insert_id;
+
+//         return $gameId;
+//     }else {
+//         return false;
+//     }
+//     $stmt->close();
+
+//     }
+//1111
+function createGame($playerId1, $playerId2) {
     global $mysqli;
 
+    
+    $stmt = $mysqli->prepare("SELECT id FROM players WHERE id IN (?, ?)");
+    $stmt->bind_param('ii', $playerId1, $playerId2);
+    $stmt->execute();
+    $stmt->store_result();
 
-    $stmt = $mysqli -> prepare("INSERT INTO games (player1_id, player2_id, status) VALUES (?,?, 'ongoing')");
-    $stmt -> bind_param('ii', $playerId1,$playerId2);
-
-    if($stmt->execute()){
-        $gameId = $stmt->insert_id;
-
-        return $gameId;
-    }else {
-        return false;
+    if ($stmt->num_rows < 2) {
+        // Insert missing players
+        if ($stmt->num_rows == 0) {
+            $stmt = $mysqli->prepare("INSERT INTO players (id, name) VALUES (?, ?), (?, ?)");
+            $name1 = "Player1";
+            $name2 = "Player2";
+            $stmt->bind_param('isii', $playerId1, $name1, $playerId2, $name2);
+            $stmt->execute();
+        } else {
+            $stmt = $mysqli->prepare("INSERT INTO players (id, name) VALUES (?, ?)");
+            if ($stmt->num_rows == 1) {
+                $existingPlayer = $stmt->fetch();
+                if ($existingPlayer['id'] == $playerId1) {
+                    $stmt->bind_param('is', $playerId2, $name2);
+                } else {
+                    $stmt->bind_param('is', $playerId1, $name1);
+                }
+                $stmt->execute();
+            }
+        }
     }
     $stmt->close();
 
+    // Insert game
+    $stmt = $mysqli->prepare("INSERT INTO games (player1_id, player2_id, status) VALUES (?, ?, 'ongoing')");
+    $stmt->bind_param('ii', $playerId1, $playerId2);
+
+    if ($stmt->execute()) {
+        $gameId = $stmt->insert_id;
+        return $gameId;
+    } else {
+        return false;
     }
+    $stmt->close();
+}
 
 //     //testing function cG ()
 // $playerId1 = '800';
@@ -37,23 +82,23 @@ function createGame($playerId1,$playerId2) {
 
 
 
-function addPlayer($name){
-    global $mysqli;
-    $token = bin2hex(random_bytes(16));
+// function addPlayer($name){
+//     global $mysqli;
+//     $token = bin2hex(random_bytes(16));
 
-    $stmt = $mysqli->prepare("INSERT INTO players (name,token, score) VALUES (?,?,0)");
-    $stmt -> bind_param('ss', $name, $token);
+//     $stmt = $mysqli->prepare("INSERT INTO players (name,token, score) VALUES (?,?,0)");
+//     $stmt -> bind_param('ss', $name, $token);
 
-    if($stmt->execute()){
-        $playerId = $stmt ->insert_id;
-        return $playerId;
+//     if($stmt->execute()){
+//         $playerId = $stmt ->insert_id;
+//         return $playerId;
 
-    }else{
-        throw new Exception("Failed to add player.");
-    }
-    $stmt->close();
-}
-// test function addPlayer()
+//     }else{
+//         throw new Exception("Failed to add player.");
+//     }
+//     $stmt->close();
+// }
+
 // try {
 //     $playerName = "Kostas"; 
 //     $newPlayerId = addPlayer($playerName);
@@ -67,78 +112,105 @@ function addPlayer($name){
 
 
 
-function fillTileBag(){
+function fillTileBag() {
     global $mysqli;
 
     $colors = ["red", "blue", "green", "yellow"];
     $shapes = ["circle", "square", "triangle", "star"];
-    $points = [1, 2, 3, 4]; 
-    $mysqli -> begin_transaction();
-//points needed or not ?? 
-    try{
-        $mysqli->query("DELETE FROM tile_bag");
-        // $mysqli->query("DELETE FROM tiles");
 
-        $stmt_tile = $mysqli->prepare("INSERT INTO tiles (color,shape,points) VALUES (?,?, ?)");
-        $stmt_bag = $mysqli-> prepare("INSERT INTO tile_bag (tile_id,quantity) VALUES (?,?)");
+    $mysqli->begin_transaction();
+
+    try {
+        $mysqli->query("DELETE FROM tiles");
+
+        $stmt_tile = $mysqli->prepare("INSERT INTO tiles (color, shape) VALUES (?, ?)");
 
         foreach ($colors as $color) {
-            foreach($shapes as $shape){
-                foreach($points as $point){
-                $stmt_tile-> bind_param("ssi", $color, $shape, $point);
-                $stmt_tile->execute();
-                $tileId= $stmt_tile ->insert_id;   // might need to change to tile_id
-
-                $quantity = 3;
-                $stmt_bag->bind_param("ii", $tileId, $quantity);
-                $stmt_bag->execute();
-
-
+            foreach ($shapes as $shape) {
+                for ($i = 0; $i < 3; $i++) {
+                    $stmt_tile->bind_param("ss", $color, $shape);
+                    $stmt_tile->execute();
+                }
             }
-            
         }
-    }
 
         $mysqli->commit();
-        $stmt_bag->close();
         $stmt_tile->close();
         echo "Tile bag filled!";
-
-    }catch( Exception $e){
+    } catch (Exception $e) {
         $mysqli->rollback();
         throw $e;
-    }    
+    }
 }
         //test     test         test        test        test
-try{
-    fillTileBag();
-}catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
-}
+// try{
+//     fillTileBag();
+// }catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
+// }
 
-function drawTile(){
+function drawTile($playerId) {
     global $mysqli;
+    $mysqli->begin_transaction();
 
-    $sql = 'SELECT tile_id FROM tile_bag ORDER BY RAND() LIMIT 1';
-    $st = $mysqli->prepare($sql);
-    $st->execute();
-    $result = $st->get_result();
-    $row = $result->fetch_assoc();
-    $tileId = $row['tile_id'];
+    try {
+        $sql = 'SELECT id FROM tiles WHERE inside_bag = 1 ORDER BY RAND() LIMIT 1';
+        $st = $mysqli->prepare($sql);
+        $st->execute();
+        $result = $st->get_result();
+        $row = $result->fetch_assoc();
+        $tileId = $row['id']; 
 
-    $sql = "UPDATE tile_bag SET quantity = quantity -1 WHERE tile_id = ?";
-    $st =  $mysqli->prepare($sql);
-    $st -> bind_param('i' , $tileId);
-    $st -> execute();
+        $sql = "INSERT INTO player_hands (player_id, tile_id) VALUES (?, ?)";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('ii', $playerId, $tileId);
+        $st->execute();
 
-    $sql =  "DELETE FROM tile_bag WHERE tile_id= ? AND quantity <=0";
-    $st = $mysqli-> prepare($sql);
-    $st ->bind_param('i', $tileId);
-    $st->execute();
+        $sql = "UPDATE tiles SET inside_bag = 0 WHERE id = ?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('i', $tileId);
+        $st->execute();
 
-    return $tileId;
-
+        $mysqli->commit();
+        return $tileId;
+    } catch (Exception $e) {
+        $mysqli->rollback();
+        throw $e;
+    }
 }
+
+//replace
+function tileToBag($playerId, $tileId) {
+    global $mysqli;
+    $mysqli->begin_transaction();
+
+    try {
+        $sql = "DELETE FROM player_hands WHERE player_id = ? AND tile_id = ?";
+        $st = $mysqli->prepare($sql);
+        $st->bind_param('ii', $playerId, $tileId);
+        $st->execute();
+
+        if ($st->affected_rows > 0) {
+            $sql = "UPDATE tiles SET inside_bag = 1 WHERE id = ?";
+            $st = $mysqli->prepare($sql);
+            $st->bind_param('i', $tileId);
+            $st->execute();
+
+            $sql = "UPDATE players SET tilesDiscardedThisTurn = tilesDiscardedThisTurn + 1 WHERE id = ?";
+            $st = $mysqli->prepare($sql);
+            $st->bind_param('i', $playerId);
+            $st->execute();
+        }
+
+        $mysqli->commit();
+        return $tileId;
+    } catch (Exception $e) {
+        $mysqli->rollback();
+        throw $e;
+    }
+}
+
+
 
 function drawTileStart($playerId){
     global $mysqli;
@@ -159,7 +231,7 @@ function drawTileStart($playerId){
     $st_hand->close();
        echo "Starting tiles drawn successfully for player ID: $playerId.";
     }catch (Exception $e) {
-        // Rollback the transaction in case of error
+     
         $mysqli->rollback();
         throw $e;
     }
@@ -209,14 +281,14 @@ function initializeGame($playerName1,$playerName2){
 
 
 //testing
-try {
-    $playerName1 = "Kos"; 
-    $playerName2 = "Chris"; 
-    $gameId = initializeGame($playerName1, $playerName2);
-    echo "Game initialized successfully with ID: " . $gameId;
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
-}
+// try {
+//     $playerName1 = "Kos"; 
+//     $playerName2 = "Chris"; 
+//     $gameId = initializeGame($playerName1, $playerName2);
+//     echo "Game initialized successfully with ID: " . $gameId;
+// } catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
+// }
 
 
 
@@ -280,6 +352,10 @@ function cleanBoard(){
 
 function placeTile($playerId, $tileId, $row, $col){
     global $mysqli;
+// need to check before placing if tile id -- exists -- in table players hand
+// need to check before placing if tile id -- exists -- in table players hand
+// need to check before placing if tile id -- exists -- in table players hand
+
 
     $mysqli->begin_transaction();
 
@@ -429,19 +505,7 @@ function validateMove($tileId,$row,$col){
     }
 }
 
-try {
-    $tileId = 453; 
-    $row = 4; 
-    $col = 5; 
-    
-    if (validateMove($tileId, $row, $col)) {
-        echo "Move is valid.";
-    } else {
-        echo "Move is invalid.";
-    }
-} catch (Exception $e) {
-    echo "Error: " . $e->getMessage();
-}
+
 
 function calculateScore($playerId, $row, $col){
 
@@ -536,40 +600,23 @@ function endTurn($playerId, $row, $col) {
         return false; 
     }
 }
-
-
-// function drawTile($gameId, $playerId) {
-//     global $mysqli;
-
-//     $stmt = $mysqli->prepare("SELECT * FROM tile_bag WHERE is_used = 0 LIMIT 1");
-//     $stmt->execute();
-//     $result = $stmt->get_result();
+//test test test test test test test//test test test test test test test
+// try {
+//     $tileId = 573; 
+//     $row = 8; 
+//     $col = 5; 
     
-//     if ($result->num_rows > 0) {
-//         // Fetch the tile data
-//         $tile = $result->fetch_assoc();
-//         $tileId = $tile['tile_id'];
+//     if (validateMove($tileId, $row, $col)) {
+//         echo "Move is valid.";
+//         placeTile(813,$tileId,$row,$col);
 
-//         $updateTile = $mysqli->prepare("UPDATE tile_bag SET is_used = 1 WHERE tile_id = ?");
-//         $updateTile->bind_param("i", $tileId);
-//         $updateTile->execute();
-
-//         $addTileToPlayer = $mysqli->prepare("INSERT INTO player_tiles (game_id, player_id, tile_id) VALUES (?, ?, ?)");
-//         $addTileToPlayer->bind_param("iii", $gameId, $playerId, $tileId);
-//         $addTileToPlayer->execute();
-
-//         return "Tile drawn successfully!";
 //     } else {
-//         return "No tiles available to draw.";
+//         echo "Move is invalid.";
 //     }
+// } catch (Exception $e) {
+//     echo "Error: " . $e->getMessage();
 // }
-// if (is_numeric($gameId)) {
-//     echo "Game created successfully with ID: " . $gameId;
 
-//     echo addPlayer($gameId, $playerId);
+//test test test test test test test//test test test test test test test
 
-//     echo drawTile($gameId, $playerId);
-// } else {
-//     echo $gameId; 
-// }
 ?>
