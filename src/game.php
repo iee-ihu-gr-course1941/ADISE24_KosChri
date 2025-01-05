@@ -179,7 +179,7 @@ function drawTileStart($playerId){
         throw $e;
     }
 }
-
+ // den leitourgei opos tha ithela
 function read_board() {
     global $mysqli;
     $sql = 'select * from board';
@@ -188,7 +188,7 @@ function read_board() {
     $res = $st->get_result();
     return($res->fetch_all(MYSQLI_ASSOC));
 }
-
+// na do ligo
 function initBoard(){
     global $mysqli;
 
