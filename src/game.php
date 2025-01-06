@@ -89,7 +89,7 @@ function read_hand($player_slot) {
     $st->close();
 
     foreach ($hand as $index => $tile) {
-        echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "<br>";
+        echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "\n";
     }
 
     echo "$player_slot's hand";
@@ -199,8 +199,8 @@ function initBoard(){
         $st = $mysqli->prepare("DELETE FROM board");
         $st->execute();
 
-        for($row =1 ; $row <=15; $row++){
-            for($col=1; $col <=15; $col++){
+        for($row =1 ; $row <=3; $row++){
+            for($col=1; $col <=3; $col++){
                 $stmt = $mysqli -> prepare("INSERT INTO board (row,col) VALUES (?,?)");
                 $stmt -> bind_param('ii', $row, $col);
                 $stmt->execute();

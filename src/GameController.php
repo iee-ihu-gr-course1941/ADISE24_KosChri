@@ -54,11 +54,11 @@ public function setUser($input) {
              echo json_encode($newPlayer, JSON_PRETTY_PRINT);
         $st->close();
 
-    if (count($takenSlots) == 0) {
-        set_status('initialized');
-    } elseif (count($takenSlots) == 1) {
-        set_status('started');
-    }
+    // if (count($takenSlots) == 0) {
+    //     set_status('initialized');
+    // } elseif (count($takenSlots) == 1) {
+    //     set_status('started');
+    // }
 }
  
 public function exchange_tile($input) {
@@ -160,6 +160,34 @@ public function end_turn() {
         $st->close();
     }
 
+    $stmt = $mysqli->prepare("SELECT COUNT(*) as occupied_spaces FROM board WHERE tile_id IS NOT NULL");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $occupied_spaces = $result->fetch_assoc()['occupied_spaces'];
+    $stmt->close();
+
+    $total_spaces = 7 * 7;
+    if ($occupied_spaces == $total_spaces) {
+        $stmt = $mysqli->prepare("
+            SELECT name, score 
+            FROM players 
+            ORDER BY score DESC 
+            LIMIT 1
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $winner = $result->fetch_assoc();
+        $stmt->close();
+
+        $sql = "UPDATE game_status SET status = 'game over'";
+        $st = $mysqli->prepare($sql);
+        $st->execute();
+        $st->close();
+
+        echo "Game over. The board is full. The winner is " . $winner['name'] . " with a score of " . $winner['score'] . ".";
+        return;
+    }
+
     $new_turn = ($current_turn == 'p1') ? 'p2' : 'p1';
 
     $sql = "UPDATE game_status SET p_turn = ?";
@@ -176,20 +204,75 @@ public function end_turn() {
 
     echo "Turn ended for player: $current_turn";
 }
+function read_board() {
+    global $mysqli;
+
+    $board = [];
+
+    try {
+        $stmt = $mysqli->prepare("
+            SELECT b.row, b.col, t.color, t.shape, p.player_slot
+            FROM board b
+            LEFT JOIN players p ON b.player_id = p.id
+            LEFT JOIN tiles t ON b.tile_id = t.id
+        ");
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        while ($row = $result->fetch_assoc()) {
+            $board[] = [
+                'row' => $row['row'],
+                'col' => $row['col'],
+                'color' => $row['color'] ? $row['color'] : 'NULL',
+                'shape' => $row['shape'] ? $row['shape'] : 'NULL',
+                'player_slot' => $row['player_slot'] ? $row['player_slot'] : 'NULL'
+            ];
+        }
+
+        $stmt->close();
+
+        // Print the board
+        foreach ($board as $tile) {
+            echo "Row: " . $tile['row'] . ", || Col: " . $tile['col'] . ", || Color: " . $tile['color'] . ", || Shape: " . $tile['shape'] . ", || Placed by: " . $tile['player_slot'] . "\n";
+        }
+
+        return $board;
+
+    } catch (Exception $e) {
+        throw new Exception("Failed to read board: " . $e->getMessage());
+    }
+}
 
 public function do_move($input) {
     global $mysqli;
 
     // Extract values from input array
     $playerSlot = $input['playerSlot'];
-    $tileIndex = $input['tileIndex']; // Index of the tile in the player's hand
+    $tileIndex = $input['tileIndex']; 
     $row = $input['row'];
     $col = $input['col'];
 
-    // Start a transaction
     $mysqli->begin_transaction();
 
     try {
+        $stmt = $mysqli->prepare("SELECT status,p_turn FROM game_status");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $gameStatusRow = $result->fetch_assoc();
+
+        if (!$gameStatusRow) {
+            throw new Exception("Game status could not be retrieved");
+        }
+
+        $gameStatus = $gameStatusRow['status'];
+        $currentPlayerSlot = $gameStatusRow['p_turn'];
+
+        if ($gameStatus !== 'started') {
+            throw new Exception("Game is not started \n");
+        }
+        if ($playerSlot !== $currentPlayerSlot) {
+            throw new Exception("It's not your turn \n");
+        }
         // Retrieve playerId from playerSlot
         $stmt = $mysqli->prepare("SELECT id FROM players WHERE player_slot = ?");
         $stmt->bind_param('s', $playerSlot);
@@ -219,13 +302,11 @@ public function do_move($input) {
             throw new Exception("Invalid move");
         }
 
-        // Step 2: Place the tile
         placeTile($playerId, $tileId, $row, $col);
 
-        // Step 3: Calculate the score
         $score = calculateScore($playerId, $row, $col);
-
-        // Commit the transaction
+        drawTile($playerId);
+        read_board();
         $mysqli->commit();
 
         echo "Move completed successfully. Score: $score";
