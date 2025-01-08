@@ -16,7 +16,8 @@ function fillTileBag() {
 
         foreach ($colors as $color) {
             foreach ($shapes as $shape) {
-                for ($i = 0; $i < 2; $i++) {
+                // replace with starting combination of tiles (meanin $i= 3 3x red stars or blue circles)
+                for ($i = 0; $i < 3; $i++) {
                     $stmt_tile->bind_param("ss", $color, $shape);
                     $stmt_tile->execute();
                 }
