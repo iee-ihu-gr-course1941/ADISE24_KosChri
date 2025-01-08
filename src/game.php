@@ -1,7 +1,6 @@
 <?php
 include('dbconnect.php');
 
-
 function fillTileBag() {
     global $mysqli;
 
@@ -32,7 +31,6 @@ function fillTileBag() {
         throw $e;
     }
 }
-
 
 function drawTile($playerId) {
     global $mysqli;
@@ -190,7 +188,7 @@ function drawTileStart($playerId) {
         echo "Error: " . $e->getMessage();
     }
 }
- // den leitourgei opos tha ithela
+
 function read_board() {
     global $mysqli;
     $sql = 'select * from board';
@@ -242,21 +240,7 @@ function cleanBoard(){
         throw $e;
     }
 }
-// moved to gameController since its not needded here
-// function read_status() {
-//     global $mysqli;
 
-//     $sql = "SELECT status, p_turn, result FROM game_status";
-//     $st = $mysqli->prepare($sql);
-//     $st->execute();
-
-//     $result = $st->get_result();
-//     $status = $result->fetch_assoc();
-
-//     $st->close();
-
-//     return $status;
-// }
 
 function set_status($status){
     global $mysqli;
@@ -279,10 +263,6 @@ function set_status($status){
 
 function placeTile($playerId, $tileId, $row, $col){
     global $mysqli;
-// need to check before placing if tile id -- exists -- in table players hand
-// need to check before placing if tile id -- exists -- in table players hand
-// need to check before placing if tile id -- exists -- in table players hand
-
 
     $mysqli->begin_transaction();
 
@@ -487,7 +467,6 @@ function endTurn($playerId, $row, $col) {
         }
         $tilesPlacedThisTurn = $result->fetch_assoc()['tilesPlacedThisTurn'];
 
-        // Reset 
         $stmt = $mysqli->prepare("UPDATE players SET tilesPlacedThisTurn = 0 WHERE id = ?");
         if (!$stmt) {
             throw new Exception("Prepare statement failed: " . $mysqli->error);
@@ -495,7 +474,6 @@ function endTurn($playerId, $row, $col) {
         $stmt->bind_param('i', $playerId);
         $stmt->execute();
 
-        // draw
         for ($i = 0; $i < $tilesPlacedThisTurn; $i++) {
             drawTile($playerId);
         }

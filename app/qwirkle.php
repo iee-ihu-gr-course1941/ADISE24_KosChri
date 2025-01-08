@@ -43,7 +43,6 @@ switch ($request[0]) {
         if($method === 'GET') {
             $gameController->read_status(true);
         } else {
-            // http_response_code(405);
             echo json_encode(['message' => 'Method Not Allowed']);
         }
         break;
@@ -71,7 +70,6 @@ switch ($request[0]) {
             echo json_encode(['message' => 'Method Not Allowed']);
         }
         break;
-
         //tester method join //
      case 'join':
         if ($method === 'GET') {
@@ -94,7 +92,6 @@ switch ($request[0]) {
         echo json_encode(['message' => 'Method Not Allowed']);
     }
     break;
-
     default:
         http_response_code(404);
         echo json_encode(['message' => 'Not Found']);

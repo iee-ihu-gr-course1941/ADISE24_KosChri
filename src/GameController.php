@@ -32,7 +32,6 @@ class GameController {
         } elseif (!in_array('p2', $takenSlots)) {
             $playerSlot = 'p2';
         } else {
-            // http_response_code(400);
             echo json_encode(['errormesg' => "All player slots are taken."]);
             return;
         }
@@ -50,7 +49,6 @@ class GameController {
         $st->execute();
         $res = $st->get_result();
         $newPlayer = $res->fetch_all(MYSQLI_ASSOC);
-        // http_response_code(200);
         echo json_encode($newPlayer, JSON_PRETTY_PRINT);
         $st->close();
 
@@ -81,7 +79,6 @@ class GameController {
 public function joinGame() {
     $this->token = $_SERVER['HTTP_X_PLAYER_TOKEN'] ?? null;
 
-    // Log token value for debugging
     error_log("Received token: " . var_export($this->token, true));  // Log to PHP error log
 
     if (!$this->token) {
@@ -90,7 +87,6 @@ public function joinGame() {
         return;
     }
 
-    // Get player by token
     $player = $this->getPlayerByToken();
 
     if (!$player) {
@@ -99,7 +95,7 @@ public function joinGame() {
         return;
     }
 
-    // Success response
+
     echo json_encode(['message' => "Player joined successfully.", 'player' => $player], JSON_PRETTY_PRINT);
 }
 private function getPlayerByToken() {
@@ -111,7 +107,6 @@ private function getPlayerByToken() {
     $player = $result->fetch_assoc();
     $st->close();
 
-    // Log player data for debugging
     error_log("Player data: " . var_export($player, true));  // Log player data
 
     return $player;
@@ -119,18 +114,6 @@ private function getPlayerByToken() {
     private function generateToken($name) {
         return md5($name . time());
     }
-
-    // private function getPlayerByToken($token) {
-    //     $sql = "SELECT * FROM players WHERE token = ?";
-    //     $st = $this->mysqli->prepare($sql);
-    //     $st->bind_param('s', $token);
-    //     $st->execute();
-    //     $result = $st->get_result();
-    //     $player = $result->fetch_assoc();
-    //     $st->close();
-
-    //     return $player;
-    // }
 
  public function exchange_tile($input) {
     global $mysqli;
@@ -229,9 +212,8 @@ public function read_hand($echo = true) {
         // Prepare the game
         initBoard();
         cleanBoard();
-        fillTileBag(); // it just fills tiles table
+        fillTileBag(); 
 
-        // Draw for p1, p2
         $sql = "SELECT id FROM players WHERE player_slot IN ('p1', 'p2')";
         $res = $mysqli->query($sql);
         $players = $res->fetch_all(MYSQLI_ASSOC);
