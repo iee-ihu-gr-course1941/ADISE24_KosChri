@@ -26,7 +26,7 @@ function fillTileBag() {
 
         $mysqli->commit();
         $stmt_tile->close();
-        echo "Tile bag filled!";
+        echo "Tile bag filled!\n";
     } catch (Exception $e) {
         $mysqli->rollback();
         throw $e;
@@ -67,6 +67,7 @@ function drawTile($playerId) {
         throw $e;
     }
 }
+
 function read_hand($player_slot) {
     global $mysqli;
 
@@ -88,11 +89,11 @@ function read_hand($player_slot) {
     $hand = $result->fetch_all(MYSQLI_ASSOC);
     $st->close();
 
-    foreach ($hand as $index => $tile) {
-        echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "\n";
-    }
+    // foreach ($hand as $index => $tile) {
+    //     echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "\n";
+    // }
 
-    echo "$player_slot's hand";
+    // echo "$player_slot's hand";
     return $hand;
 }
 
@@ -117,6 +118,8 @@ function tileToBag($player_slot, $tile_index) {
     }
 
     $tile_id = $hand[$tile_index - 1]['id'];
+    $tile_shape = $hand[$tile_index - 1]['shape'];
+    $tile_color = $hand[$tile_index - 1]['color'];
 
     $mysqli->begin_transaction();
 
@@ -125,35 +128,35 @@ function tileToBag($player_slot, $tile_index) {
         $st = $mysqli->prepare($sql);
         $st->bind_param('ii', $player_id, $tile_id);
         $st->execute();
-         echo "Deleted tile: $st->affected_rows rows affected<br>";
 
         if ($st->affected_rows > 0) {
             $sql = "UPDATE tiles SET inside_bag = 1 WHERE id = ?";
             $st = $mysqli->prepare($sql);
             $st->bind_param('i', $tile_id);
             $st->execute();
-                        echo "Updated tile inside_bag: $st->affected_rows rows affected<br>";
 
             $sql = "UPDATE players SET tilesDiscardedThisTurn = tilesDiscardedThisTurn + 1 WHERE id = ?";
             $st = $mysqli->prepare($sql);
             $st->bind_param('i', $player_id);
             $st->execute();
-                        echo "Updated tilesDiscardedThisTurn: $st->affected_rows rows affected<br>";
 
-
-                        $sql = "SELECT tilesDiscardedThisTurn FROM players WHERE id = ?";
+            $sql = "SELECT tilesDiscardedThisTurn FROM players WHERE id = ?";
             $st = $mysqli->prepare($sql);
             $st->bind_param('i', $player_id);
             $st->execute();
             $result = $st->get_result();
             $player = $result->fetch_assoc();
-            echo "tilesDiscardedThisTurn value after update: " . $player['tilesDiscardedThisTurn'] . "<br>";
-
-
         }
 
         $mysqli->commit();
-        echo "Transaction complete. Tile $tile_index placed back into the tile bag.";
+
+        echo "Tile " . $tile_shape . ", " . $tile_color . " is placed to the bag. Your hand looks like this:\n";
+
+        $updated_hand = read_hand($player_slot);
+        foreach ($updated_hand as $index => $tile) {
+            echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "\n";
+        }
+
         return $tile_id;
     } catch (Exception $e) {
         $mysqli->rollback();
@@ -161,22 +164,30 @@ function tileToBag($player_slot, $tile_index) {
     }
 }
 
-function drawTileStart($playerId){
+function drawTileStart($playerId) {
     global $mysqli;
-
     $mysqli->begin_transaction();
-    
-    try{        
-        for($i=0 ; $i<6; $i++){
+
+    try {
+        $stmt = $mysqli->prepare("SELECT name, player_slot FROM players WHERE id = ?");
+        $stmt->bind_param("i", $playerId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+
+        $player = $result->fetch_assoc();
+        $playerName = $player['name'];
+        $playerSlot = $player['player_slot'];
+        for ($i = 0; $i < 6; $i++) {
             $tileId = drawTile($playerId);
         }
-    
-    $mysqli->commit();
-    echo "Starting tiles drawn successfully for player ID: $playerId.";
-    }catch (Exception $e) {
-     
+
+        $mysqli->commit();
+        echo "Starting tiles drawn successfully for player ID: $playerSlot ,$playerName \n";
+
+    } catch (Exception $e) {
         $mysqli->rollback();
-        throw $e;
+        echo "Error: " . $e->getMessage();
     }
 }
  // den leitourgei opos tha ithela
@@ -207,7 +218,7 @@ function initBoard(){
             }
         }
         $mysqli->commit();
-        echo "Board init successfully.";
+        echo "Board init successfully.\n";
 
     }catch(Exception $e){
         $mysqli->rollback();
@@ -225,27 +236,27 @@ function cleanBoard(){
         $stmt->execute();
 
         $mysqli->commit();
-        echo "Board cleaned successfully.";
+        echo "Board clean! \n ";
     }catch (Exception $e) {
         $mysqli->rollback();
         throw $e;
     }
 }
+// moved to gameController since its not needded here
+// function read_status() {
+//     global $mysqli;
 
-function read_status() {
-    global $mysqli;
+//     $sql = "SELECT status, p_turn, result FROM game_status";
+//     $st = $mysqli->prepare($sql);
+//     $st->execute();
 
-    $sql = "SELECT status, p_turn, result FROM game_status";
-    $st = $mysqli->prepare($sql);
-    $st->execute();
+//     $result = $st->get_result();
+//     $status = $result->fetch_assoc();
 
-    $result = $st->get_result();
-    $status = $result->fetch_assoc();
+//     $st->close();
 
-    $st->close();
-
-    return $status;
-}
+//     return $status;
+// }
 
 function set_status($status){
     global $mysqli;

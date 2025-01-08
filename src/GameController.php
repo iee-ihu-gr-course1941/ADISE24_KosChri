@@ -5,14 +5,14 @@ require_once 'users.php';
 
 class GameController {
     private $mysqli;
-
+    private $token;
 
     public function __construct() {
         $this->mysqli = $GLOBALS['mysqli'];
+        $this->token = $_SERVER['HTTP_X_PLAYER_TOKEN'] ?? null;
     }
 
-
-public function setUser($input) {
+    public function setUser($input) {
         global $mysqli;
 
         if (!isset($input['name']) || $input['name'] == '') {
@@ -32,12 +32,12 @@ public function setUser($input) {
         } elseif (!in_array('p2', $takenSlots)) {
             $playerSlot = 'p2';
         } else {
-            http_response_code(400);
+            // http_response_code(400);
             echo json_encode(['errormesg' => "All player slots are taken."]);
             return;
         }
 
-        $token = md5($name . time());
+        $token = $this->generateToken($name);
 
         $sql = "INSERT INTO players (name, token, player_slot) VALUES (?, ?, ?)";
         $st = $mysqli->prepare($sql);
@@ -50,24 +50,107 @@ public function setUser($input) {
         $st->execute();
         $res = $st->get_result();
         $newPlayer = $res->fetch_all(MYSQLI_ASSOC);
-             http_response_code(200);
-             echo json_encode($newPlayer, JSON_PRETTY_PRINT);
+        // http_response_code(200);
+        echo json_encode($newPlayer, JSON_PRETTY_PRINT);
         $st->close();
 
-    // if (count($takenSlots) == 0) {
-    //     set_status('initialized');
-    // } elseif (count($takenSlots) == 1) {
-    //     set_status('started');
-    // }
+        if (count($takenSlots) == 0) {
+            set_status('initialized');
+        } elseif (count($takenSlots) == 1) {
+            set_status('started');
+        }
+    }
+
+ public function read_status($echo = true) {
+        global $mysqli;
+
+        $sql = "SELECT status, p_turn, result FROM game_status";
+        $st = $mysqli->prepare($sql);
+        $st->execute();
+
+        $result = $st->get_result();
+        $status = $result->fetch_assoc();
+
+        $st->close();
+        if ($echo) {
+        echo json_encode($status, JSON_PRETTY_PRINT);
+    }
+        return $status;
 }
- 
-public function exchange_tile($input) {
+
+public function joinGame() {
+    $this->token = $_SERVER['HTTP_X_PLAYER_TOKEN'] ?? null;
+
+    // Log token value for debugging
+    error_log("Received token: " . var_export($this->token, true));  // Log to PHP error log
+
+    if (!$this->token) {
+        http_response_code(400);
+        echo json_encode(['errormesg' => "Token is missing or invalid."]);
+        return;
+    }
+
+    // Get player by token
+    $player = $this->getPlayerByToken();
+
+    if (!$player) {
+        http_response_code(404);
+        echo json_encode(['errormesg' => "Player not found."]);
+        return;
+    }
+
+    // Success response
+    echo json_encode(['message' => "Player joined successfully.", 'player' => $player], JSON_PRETTY_PRINT);
+}
+private function getPlayerByToken() {
+    $sql = "SELECT * FROM players WHERE token = ?";
+    $st = $this->mysqli->prepare($sql);
+    $st->bind_param('s', $this->token);
+    $st->execute();
+    $result = $st->get_result();
+    $player = $result->fetch_assoc();
+    $st->close();
+
+    // Log player data for debugging
+    error_log("Player data: " . var_export($player, true));  // Log player data
+
+    return $player;
+}
+    private function generateToken($name) {
+        return md5($name . time());
+    }
+
+    // private function getPlayerByToken($token) {
+    //     $sql = "SELECT * FROM players WHERE token = ?";
+    //     $st = $this->mysqli->prepare($sql);
+    //     $st->bind_param('s', $token);
+    //     $st->execute();
+    //     $result = $st->get_result();
+    //     $player = $result->fetch_assoc();
+    //     $st->close();
+
+    //     return $player;
+    // }
+
+ public function exchange_tile($input) {
     global $mysqli;
 
-    $player_slot = $input['player_slot'];
+    $player = $this->getPlayerByToken();
+    if (!$player) {
+        echo "Invalid token.";
+        return;
+    }
+
+    if (!isset($input['tile_index'])) {
+        echo "Missing tile_index.";
+        return;
+    }
+
+    $player_id = $player['id'];
+    $player_slot = $player['player_slot'];
     $tile_index = $input['tile_index'];
 
-    $game_status = read_status();
+    $game_status = $this->read_status(false); 
     $current_turn = $game_status['p_turn'];
 
     if ($current_turn !== $player_slot) {
@@ -75,13 +158,12 @@ public function exchange_tile($input) {
         return;
     }
 
-    $sql = "SELECT id, tilesPlacedThisTurn FROM players WHERE player_slot = ?";
+    $sql = "SELECT id, tilesPlacedThisTurn FROM players WHERE id = ?";
     $st = $mysqli->prepare($sql);
-    $st->bind_param('s', $player_slot);
+    $st->bind_param('i', $player_id);
     $st->execute();
     $result = $st->get_result();
     $player = $result->fetch_assoc();
-    $player_id = $player['id'];
     $tilesPlacedThisTurn = $player['tilesPlacedThisTurn'];
     $st->close();
 
@@ -93,8 +175,38 @@ public function exchange_tile($input) {
     tileToBag($player_slot, $tile_index);
 }
 
+public function read_hand($echo = true) {
+    global $mysqli;
+
+    $player = $this->getPlayerByToken();
+    if (!$player) {
+        echo "Invalid token.";
+        return;
+    }
+
+    $player_id = $player['id'];
+    $player_slot = $player['player_slot'];
+
+    $sql = "SELECT t.id, t.shape, t.color FROM player_hands ph JOIN tiles t ON ph.tile_id = t.id WHERE ph.player_id = ?";
+    $st = $mysqli->prepare($sql);
+    $st->bind_param('i', $player_id);
+    $st->execute();
+    $result = $st->get_result();
+
+    $hand = $result->fetch_all(MYSQLI_ASSOC);
+    $st->close();
+    if ($echo) {
+       foreach ($hand as $index => $tile) {
+        echo ($index + 1) . ". Shape: " . $tile['shape'] . ", Color: " . $tile['color'] . "\n";
+    }
+
+    echo " Your hand ($player_slot) ";
+    }
     
-     public function start() {
+    return $hand;
+}
+
+    public function start() {
         global $mysqli;
 
         $sql = "SELECT player_slot FROM players WHERE player_slot IN ('p1', 'p2')";
@@ -114,12 +226,12 @@ public function exchange_tile($input) {
         $st->bind_param('s', $startingPlayer);
         $st->execute();
 
-        //prepare the game
+        // Prepare the game
         initBoard();
         cleanBoard();
-        fillTileBag();
+        fillTileBag(); // it just fills tiles table
 
-        // draw for p1,p2
+        // Draw for p1, p2
         $sql = "SELECT id FROM players WHERE player_slot IN ('p1', 'p2')";
         $res = $mysqli->query($sql);
         $players = $res->fetch_all(MYSQLI_ASSOC);
@@ -134,8 +246,19 @@ public function exchange_tile($input) {
 public function end_turn() {
     global $mysqli;
 
-    $game_status = read_status();
+    $game_status = $this->read_status(false);  
     $current_turn = $game_status['p_turn'];
+
+    $player = $this->getPlayerByToken();
+    if (!$player) {
+        echo "Invalid token.";
+        return;
+    }
+
+    if ($player['player_slot'] !== $current_turn) {
+        echo "It's not your turn.";
+        return;
+    }
 
     $sql = "SELECT id, tilesPlacedThisTurn, tilesDiscardedThisTurn FROM players WHERE player_slot = ?";
     $st = $mysqli->prepare($sql);
@@ -204,50 +327,61 @@ public function end_turn() {
 
     echo "Turn ended for player: $current_turn";
 }
-function read_board() {
-    global $mysqli;
 
-    $board = [];
+    function read_board() {
+        global $mysqli;
 
-    try {
-        $stmt = $mysqli->prepare("
-            SELECT b.row, b.col, t.color, t.shape, p.player_slot
-            FROM board b
-            LEFT JOIN players p ON b.player_id = p.id
-            LEFT JOIN tiles t ON b.tile_id = t.id
-        ");
-        $stmt->execute();
-        $result = $stmt->get_result();
+        $board = [];
 
-        while ($row = $result->fetch_assoc()) {
-            $board[] = [
-                'row' => $row['row'],
-                'col' => $row['col'],
-                'color' => $row['color'] ? $row['color'] : 'NULL',
-                'shape' => $row['shape'] ? $row['shape'] : 'NULL',
-                'player_slot' => $row['player_slot'] ? $row['player_slot'] : 'NULL'
-            ];
+        try {
+            $stmt = $mysqli->prepare("
+                SELECT b.row, b.col, t.color, t.shape, p.player_slot
+                FROM board b
+                LEFT JOIN players p ON b.player_id = p.id
+                LEFT JOIN tiles t ON b.tile_id = t.id
+            ");
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            while ($row = $result->fetch_assoc()) {
+                $board[] = [
+                    'row' => $row['row'],
+                    'col' => $row['col'],
+                    'color' => $row['color'] ? $row['color'] : 'NULL',
+                    'shape' => $row['shape'] ? $row['shape'] : 'NULL',
+                    'player_slot' => $row['player_slot'] ? $row['player_slot'] : 'NULL'
+                ];
+            }
+
+            $stmt->close();
+
+            // Print the board
+            foreach ($board as $tile) {
+                echo "Row: " . $tile['row'] . ", || Col: " . $tile['col'] . ", || Color: " . $tile['color'] . ", || Shape: " . $tile['shape'] . ", || Placed by: " . $tile['player_slot'] . "\n";
+            }
+
+            return $board;
+
+        } catch (Exception $e) {
+            throw new Exception("Failed to read board: " . $e->getMessage());
         }
-
-        $stmt->close();
-
-        // Print the board
-        foreach ($board as $tile) {
-            echo "Row: " . $tile['row'] . ", || Col: " . $tile['col'] . ", || Color: " . $tile['color'] . ", || Shape: " . $tile['shape'] . ", || Placed by: " . $tile['player_slot'] . "\n";
-        }
-
-        return $board;
-
-    } catch (Exception $e) {
-        throw new Exception("Failed to read board: " . $e->getMessage());
     }
-}
 
 public function do_move($input) {
     global $mysqli;
 
-    // Extract values from input array
-    $playerSlot = $input['playerSlot'];
+    $player = $this->getPlayerByToken();
+    if (!$player) {
+        echo "Invalid token.";
+        return;
+    }
+
+    if (!isset($input['tileIndex']) || !isset($input['row']) || !isset($input['col'])) {
+        echo "Invalid input parameters.";
+        return;
+    }
+
+    $playerSlot = $player['player_slot']; 
     $tileIndex = $input['tileIndex']; 
     $row = $input['row'];
     $col = $input['col'];
@@ -255,7 +389,7 @@ public function do_move($input) {
     $mysqli->begin_transaction();
 
     try {
-        $stmt = $mysqli->prepare("SELECT status,p_turn FROM game_status");
+        $stmt = $mysqli->prepare("SELECT status, p_turn FROM game_status");
         $stmt->execute();
         $result = $stmt->get_result();
         $gameStatusRow = $result->fetch_assoc();
@@ -273,31 +407,16 @@ public function do_move($input) {
         if ($playerSlot !== $currentPlayerSlot) {
             throw new Exception("It's not your turn \n");
         }
-        // Retrieve playerId from playerSlot
-        $stmt = $mysqli->prepare("SELECT id FROM players WHERE player_slot = ?");
-        $stmt->bind_param('s', $playerSlot);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $player = $result->fetch_assoc();
-
-        if (!$player) {
-            throw new Exception("Invalid player slot");
-        }
 
         $playerId = $player['id'];
+        $hand = $this->read_hand(false); 
 
-        // Retrieve the player's hand
-        $hand = read_hand($playerSlot);
-
-        // Check if the tile index is valid
         if (!isset($hand[$tileIndex - 1])) {
             throw new Exception("Invalid tile index");
         }
 
-        // Get the tile ID from the hand using the index
         $tileId = $hand[$tileIndex - 1]['id'];
 
-        // Step 1: Validate the move
         if (!validateMove($tileId, $row, $col)) {
             throw new Exception("Invalid move");
         }
@@ -306,19 +425,15 @@ public function do_move($input) {
 
         $score = calculateScore($playerId, $row, $col);
         drawTile($playerId);
+        $hand = $this->read_hand(true); 
         read_board();
         $mysqli->commit();
 
         echo "Move completed successfully. Score: $score";
 
     } catch (Exception $e) {
-        // Rollback the transaction in case of error
         $mysqli->rollback();
         echo "Move failed: " . $e->getMessage();
     }
 }
-
-
-
 }
-?>
