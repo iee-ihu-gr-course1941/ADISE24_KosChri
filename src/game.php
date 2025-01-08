@@ -210,8 +210,8 @@ function initBoard(){
         $st = $mysqli->prepare("DELETE FROM board");
         $st->execute();
 
-        for($row =1 ; $row <=3; $row++){
-            for($col=1; $col <=3; $col++){
+        for($row =1 ; $row <=7; $row++){
+            for($col=1; $col <=7; $col++){
                 $stmt = $mysqli -> prepare("INSERT INTO board (row,col) VALUES (?,?)");
                 $stmt -> bind_param('ii', $row, $col);
                 $stmt->execute();
