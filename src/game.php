@@ -366,7 +366,7 @@ function validateMove($tileId, $row, $col) {
             $adjRow = $position['row'];
             $adjCol = $position['col'];
 
-            if ($adjRow >= 0 && $adjRow < 7 && $adjCol >= 0 && $adjCol < 7) {
+            if ($adjRow >= 0 && $adjRow <= 7 && $adjCol >= 0 && $adjCol <= 7) {
                 $st = $mysqli->prepare("SELECT tile_id FROM board WHERE row=? AND col=?");
                 $st->bind_param('ii', $adjRow, $adjCol);
                 $st->execute();
