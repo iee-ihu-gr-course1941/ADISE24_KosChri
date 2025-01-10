@@ -76,10 +76,10 @@ class GameController {
         return $status;
 }
 
-public function joinGame() {
+public function getUser() {
     $this->token = $_SERVER['HTTP_X_PLAYER_TOKEN'] ?? null;
 
-    error_log("Received token: " . var_export($this->token, true));  // Log to PHP error log
+    error_log("Received token: " . var_export($this->token, true)); 
 
     if (!$this->token) {
         http_response_code(400);
@@ -90,13 +90,13 @@ public function joinGame() {
     $player = $this->getPlayerByToken();
 
     if (!$player) {
-        http_response_code(404);
+        // http_response_code(404);
         echo json_encode(['errormesg' => "Player not found."]);
         return;
     }
 
 
-    echo json_encode(['message' => "Player joined successfully.", 'player' => $player], JSON_PRETTY_PRINT);
+    echo json_encode(['message' => "Player info", 'player' => $player], JSON_PRETTY_PRINT);
 }
 private function getPlayerByToken() {
     $sql = "SELECT * FROM players WHERE token = ?";
@@ -107,7 +107,7 @@ private function getPlayerByToken() {
     $player = $result->fetch_assoc();
     $st->close();
 
-    error_log("Player data: " . var_export($player, true));  // Log player data
+    error_log("Player data: " . var_export($player, true)); 
 
     return $player;
 }
@@ -190,45 +190,48 @@ public function read_hand($echo = true) {
 }
 
     public function start() {
-        global $mysqli;
+    global $mysqli;
 
-        $sql = "SELECT player_slot FROM players WHERE player_slot IN ('p1', 'p2')";
-        $res = $mysqli->query($sql);
-        $players = $res->fetch_all(MYSQLI_ASSOC);
+    $sql = "SELECT player_slot FROM players WHERE player_slot IN ('p1', 'p2')";
+    $res = $mysqli->query($sql);
+    $players = $res->fetch_all(MYSQLI_ASSOC);
 
-        if (count($players) < 2) {
-            http_response_code(400);
-            echo json_encode(['errormesg' => "Both players must be set. Try adding player"]);
-            return;
-        }
-
-        $startingPlayer = $players[array_rand($players)]['player_slot'];
-
-        $sql = "UPDATE game_status SET p_turn=?";
-        $st = $mysqli->prepare($sql);
-        $st->bind_param('s', $startingPlayer);
-        $st->execute();
-
-        // Prepare the game
-        initBoard();
-        cleanBoard();
-        fillTileBag(); 
-
-        $sql = "SELECT id FROM players WHERE player_slot IN ('p1', 'p2')";
-        $res = $mysqli->query($sql);
-        $players = $res->fetch_all(MYSQLI_ASSOC);
-
-        foreach ($players as $player) {
-            drawTileStart($player['id']);
-        }
-
-        echo "Game started! It's $startingPlayer's turn.";
+    if (count($players) < 2) {
+        // http_response_code(400);
+        echo json_encode(['errormesg' => "Both players must be set. Try adding player"]);
+        return;
     }
+
+    $startingPlayer = $players[array_rand($players)]['player_slot'];
+
+    $sql = "UPDATE game_status SET p_turn=?";
+    $st = $mysqli->prepare($sql);
+    $st->bind_param('s', $startingPlayer);
+    $st->execute();
+
+    $sql = "UPDATE players SET score = 0, tilesDiscardedThisTurn = 0, tilesPlacedThisTurn = 0 WHERE player_slot IN ('p1', 'p2')";
+    $mysqli->query($sql);
+
+    // Prepare the game
+    initBoard();
+    cleanBoard();
+    fillTileBag();
+
+    $sql = "SELECT id FROM players WHERE player_slot IN ('p1', 'p2')";
+    $res = $mysqli->query($sql);
+    $players = $res->fetch_all(MYSQLI_ASSOC);
+
+    foreach ($players as $player) {
+        drawTileStart($player['id']);
+    }
+
+    echo "Game started! It's $startingPlayer's turn.";
+}
 
 public function end_turn() {
     global $mysqli;
 
-    $game_status = $this->read_status(false);  
+    $game_status = $this->read_status(false);
     $current_turn = $game_status['p_turn'];
 
     $player = $this->getPlayerByToken();
@@ -253,6 +256,14 @@ public function end_turn() {
     $tilesDiscardedThisTurn = $player['tilesDiscardedThisTurn'];
     $st->close();
 
+    for ($i = 0; $i < $tilesPlacedThisTurn; $i++) {
+        $tileId = drawTile($player_id);
+        if ($tileId === null) {
+            echo "No more tiles left in the bag. You only drew " . ($i) . " tiles.\n";
+            break;
+        }
+    }
+
     if ($tilesDiscardedThisTurn != 0) {
         for ($i = 0; $i < $tilesDiscardedThisTurn; $i++) {
             drawTile($player_id);
@@ -273,23 +284,30 @@ public function end_turn() {
 
     $total_spaces = 7 * 7;
     if ($occupied_spaces == $total_spaces) {
-        $stmt = $mysqli->prepare("
-            SELECT name, score 
-            FROM players 
-            ORDER BY score DESC 
-            LIMIT 1
-        ");
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $winner = $result->fetch_assoc();
-        $stmt->close();
+        $this->whoWins();
+        return;
+    }
 
-        $sql = "UPDATE game_status SET status = 'game over'";
+    $stmt = $mysqli->prepare("SELECT COUNT(*) as tiles_in_bag FROM tiles WHERE inside_bag = 1");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $tiles_in_bag = $result->fetch_assoc()['tiles_in_bag'];
+    $stmt->close();
+
+    $player_hand = $this->read_hand(false);
+    if ($tiles_in_bag == 0 && empty($player_hand)) {
+        echo "No tiles left in the bag and the player's hand is empty.\n";
+        $sql = "UPDATE players SET score = score + 6 WHERE id = ?";
         $st = $mysqli->prepare($sql);
-        $st->execute();
+        $st->bind_param('i', $player_id);
+        if ($st->execute()) {
+            echo " +6 score for emptying your hand first.\n";
+        } else {
+            echo "Error on giving +6 score: " . $mysqli->error;
+        }
         $st->close();
-
-        echo "Game over. The board is full. The winner is " . $winner['name'] . " with a score of " . $winner['score'] . ".";
+        
+        whoWins();
         return;
     }
 
@@ -377,7 +395,7 @@ public function do_move($input) {
         $gameStatusRow = $result->fetch_assoc();
 
         if (!$gameStatusRow) {
-            throw new Exception("Game status could not be retrieved");
+            throw new Exception("Game status could not be retrieved\n");
         }
 
         $gameStatus = $gameStatusRow['status'];
@@ -391,31 +409,47 @@ public function do_move($input) {
         }
 
         $playerId = $player['id'];
+
+        // Check if tilesDiscardedThisTurn is non-zero
+        $stmt = $mysqli->prepare("SELECT tilesDiscardedThisTurn FROM players WHERE id = ?");
+        $stmt->bind_param('i', $playerId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $playerData = $result->fetch_assoc();
+        $tilesDiscardedThisTurn = $playerData['tilesDiscardedThisTurn'];
+        $stmt->close();
+
+        if ($tilesDiscardedThisTurn != 0) {
+            echo "You have already discarded tiles this turn.\n";
+            return;
+        }
+
         $hand = $this->read_hand(false); 
 
         if (!isset($hand[$tileIndex - 1])) {
-            throw new Exception("Invalid tile index");
+            throw new Exception("Invalid tile index \n");
         }
 
         $tileId = $hand[$tileIndex - 1]['id'];
 
         if (!validateMove($tileId, $row, $col)) {
-            throw new Exception("Invalid move");
+            throw new Exception("Invalid move \n");
         }
 
         placeTile($playerId, $tileId, $row, $col);
 
         $score = calculateScore($playerId, $row, $col);
-        drawTile($playerId);
+        // drawTile($playerId); player should draw at the end of their turn
         $hand = $this->read_hand(true); 
-        read_board();
+        // read_board();
         $mysqli->commit();
 
-        echo "Move completed successfully. Score: $score";
+        echo "Move completed successfully. Scored: + $score";
 
     } catch (Exception $e) {
         $mysqli->rollback();
-        echo "Move failed: " . $e->getMessage();
+        echo "Move failed: \n" . $e->getMessage();
+        $hand = $this->read_hand(true); 
     }
 }
 }

@@ -71,14 +71,14 @@ switch ($request[0]) {
         }
         break;
         //tester method join //
-     case 'join':
+     case 'getUser':
         if ($method === 'GET') {
         if (!$token) {
             http_response_code(400);
             echo json_encode(['message' => 'Token is required']);
             return;
         }
-        $gameController->joinGame();
+        $gameController->getUser();
     }else {
         http_response_code(405);
         echo json_encode(['message' => 'Method Not Allowed']);
