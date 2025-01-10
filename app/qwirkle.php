@@ -3,31 +3,19 @@ require_once '../src/dbconnect.php';
 require_once '../src/GameController.php';
 
 $method = $_SERVER['REQUEST_METHOD'];
-
-if (isset($_SERVER['PATH_INFO']) && $_SERVER['PATH_INFO'] !== '') {
-    $request = explode('/', trim($_SERVER['PATH_INFO'], '/'));
-} else {
-    $request = [''];
-}
+$request = isset($_SERVER['PATH_INFO']) && $_SERVER['PATH_INFO'] !== '' 
+    ? explode('/', trim($_SERVER['PATH_INFO'], '/')) 
+    : [''];
+    $token = $_SERVER['HTTP_X_PLAYER_TOKEN'] ?? null;
 
 
-$input = json_decode(file_get_contents('php://input'),true);
+$input = json_decode(file_get_contents('php://input'), true) ?? [];
 
-if ($input == null) {
-    $input = [];
-}
-// if(isset($_SERVER['HTTP_X_TOKEN'])) {
-//     $input['token']=$_SERVER['HTTP_X_TOKEN'];
-// } else {
-//     $input['token']='';
-// }
-// $pX=$input['pX']; // player x could be 1 or 2
-// $gamename=$input['gamename'];
 
 $gameController = new GameController();
 
 switch ($request[0]) {
-    case 'board' : 
+    case 'board': 
         if ($method === 'GET') {
             $gameController->read_board();
         } else {
@@ -52,44 +40,61 @@ switch ($request[0]) {
         }
         break;
     case 'status':
-        if($method === 'POST'){
-            $gameController->setStatus();
-        }else if($method === 'GET'){
-            $gameController->read_status();
-        }else {
-            http_response_code(405);
+        if($method === 'GET') {
+            $gameController->read_status(true);
+        } else {
             echo json_encode(['message' => 'Method Not Allowed']);
-        }break;
+        }
+        break;
     case 'exchange':
-        if($method === 'POST'){
+        if ($method === 'POST') {
             $gameController->exchange_tile($input);
-        }else {
+        } else {
             http_response_code(405);
             echo json_encode(['message' => 'Method Not Allowed']);
-        }break;
+        }
+        break;
     case 'turnEnd':
-        if($method === 'POST'){
-            $gameController-> end_turn();
-        }else {
+        if ($method === 'POST') {
+            $gameController->end_turn($input);
+        } else {
             http_response_code(405);
             echo json_encode(['message' => 'Method Not Allowed']);
-        }break;
+        }
+        break;
     case 'place':
-        if($method === 'POST'){
-            $gameController-> do_move($input);
-        }else {
+        if ($method === 'POST') {
+            $gameController->do_move($input);
+        } else {
             http_response_code(405);
             echo json_encode(['message' => 'Method Not Allowed']);
-        }break;
-        default:
+        }
+        break;
+        //tester method join //
+     case 'getUser':
+        if ($method === 'GET') {
+        if (!$token) {
+            http_response_code(400);
+            echo json_encode(['message' => 'Token is required']);
+            return;
+        }
+        $gameController->getUser();
+    }else {
+        http_response_code(405);
+        echo json_encode(['message' => 'Method Not Allowed']);
+    }
+    break;
+    case 'hand':
+        if($method === 'GET'){
+            $gameController->read_hand(true);
+        }else {
+        http_response_code(405);
+        echo json_encode(['message' => 'Method Not Allowed']);
+    }
+    break;
+    default:
         http_response_code(404);
         echo json_encode(['message' => 'Not Found']);
         break;
-
-   
 }
-
-
-
-
 ?>
